@@ -7,7 +7,9 @@ import { HUDScene } from './scenes/HUDScene';
 import { GameOverScene } from './scenes/GameOverScene';
 import { VictoryScene } from './scenes/VictoryScene';
 
-new Phaser.Game({
+const SCENES = [BootScene, MenuScene, GameScene, HUDScene, GameOverScene, VictoryScene];
+
+export const game = new Phaser.Game({
   type: Phaser.AUTO,
   parent: 'game',
   backgroundColor: '#05060a',
@@ -21,8 +23,12 @@ new Phaser.Game({
     default: 'arcade',
     arcade: { gravity: { x: 0, y: GAME.GRAVITY }, debug: false },
   },
-  scene: [BootScene, MenuScene, GameScene, HUDScene, GameOverScene, VictoryScene],
+  scene: SCENES,
 });
+
+if (typeof window !== 'undefined') {
+  (window as unknown as { __game: Phaser.Game }).__game = game;
+}
 
 const boot = document.getElementById('boot');
 if (boot) boot.remove();

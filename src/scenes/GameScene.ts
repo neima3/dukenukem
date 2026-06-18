@@ -33,7 +33,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
   player!: Player;
   enemies!: Phaser.Physics.Arcade.Group;
   bosses!: Phaser.Physics.Arcade.Group;
-  projectiles = new ProjectilePool(this);
+  projectiles!: ProjectilePool;
   enemyProjectiles!: Phaser.Physics.Arcade.Group;
   pickups!: Phaser.Physics.Arcade.Group;
   solids!: Phaser.Physics.Arcade.StaticGroup;
