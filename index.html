@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <meta name="theme-color" content="#0a0a12" />
+    <meta name="description" content="Rex Brutus: Alien Apocalypse — an original retro side-scrolling action shooter." />
+    <title>REX BRUTUS: Alien Apocalypse</title>
+    <style>
+      :root { color-scheme: dark; }
+      html, body {
+        margin: 0; padding: 0; height: 100%; background: #05060a; overflow: hidden;
+        font-family: ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+      }
+      #game { width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center; }
+      canvas { image-rendering: pixelated; image-rendering: crisp-edges; touch-action: none; }
+      #boot {
+        position: fixed; inset: 0; display: flex; align-items: center; justify-content: center;
+        color: #ff2d6a; font-size: 14px; letter-spacing: 2px; background: #05060a;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game">
+      <div id="boot">LOADING REX BRUTUS...</div>
+    </div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>

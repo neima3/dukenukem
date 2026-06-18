@@ -1,0 +1,20 @@
+{
+  "name": "rex-brutus-alien-apocalypse",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Rex Brutus: Alien Apocalypse — an original 2D side-scrolling action shooter.",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "phaser": "^3.80.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.4.5",
+    "vite": "^5.2.0"
+  }
+}
