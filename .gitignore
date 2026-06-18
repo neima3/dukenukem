@@ -7,3 +7,4 @@ dist
 npm-debug.log*
 .vite
 coverage
+.deploy/
