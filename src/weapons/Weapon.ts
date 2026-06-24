@@ -12,7 +12,6 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
   lifeMs = 1400;
   born = 0;
   isEnemy = false;
-  armed = true;       // pipe bombs become armed (detonatable) when false
   spawnX = 0; spawnY = 0;
 
   constructor(scene: Phaser.Scene, texture: string) {
@@ -31,7 +30,6 @@ export class Projectile extends Phaser.Physics.Arcade.Sprite {
     this.explosionRadius = opts.explosionRadius ?? 0;
     this.lifeMs = opts.lifeMs ?? 1400;
     this.isEnemy = opts.isEnemy ?? false;
-    this.armed = opts.armed ?? true;
     this.born = 0;
     this.spawnX = x; this.spawnY = y;
     this.setVelocity(vx, vy);
@@ -142,7 +140,6 @@ export abstract class Weapon {
         isExplosive: !!this.def.isExplosive,
         explosionRadius: this.def.explosion ?? 0,
         lifeMs: this.id === 'pipebomb' ? 6000 : 1600,
-        armed: this.id !== 'pipebomb',
       });
       scene.registerProjectile(p);
     }

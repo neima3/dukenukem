@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { clamp, mulberry32, segmentAABB, weaponRefill } from '../src/utils';
+import { clamp, mulberry32, segmentAABB, weaponRefill, splashDamage, difficultyForLevel } from '../src/utils';
 
 describe('clamp', () => {
   it('clamps within range', () => {
@@ -61,5 +61,49 @@ describe('weaponRefill', () => {
   it('returns 0 for the pistol / unknown', () => {
     expect(weaponRefill('pistol')).toBe(0);
     expect(weaponRefill('nonsense')).toBe(0);
+  });
+});
+
+describe('splashDamage', () => {
+  it('deals full damage at the center', () => {
+    expect(splashDamage(100, 0, 100)).toBe(100);
+  });
+  it('decays linearly to ~30% at the radius edge', () => {
+    expect(splashDamage(100, 100, 100)).toBeCloseTo(30, 5);
+    expect(splashDamage(100, 50, 100)).toBeCloseTo(65, 5);
+  });
+  it('deals no damage at or beyond the radius', () => {
+    expect(splashDamage(100, 100, 100)).toBeLessThanOrEqual(100);
+    expect(splashDamage(100, 101, 100)).toBe(0);
+    expect(splashDamage(100, 999, 100)).toBe(0);
+  });
+  it('is monotonic (closer = more damage)', () => {
+    const near = splashDamage(120, 10, 130);
+    const mid = splashDamage(120, 65, 130);
+    const far = splashDamage(120, 120, 130);
+    expect(near).toBeGreaterThan(mid);
+    expect(mid).toBeGreaterThan(far);
+  });
+  it('is safe with zero radius', () => {
+    expect(splashDamage(100, 0, 0)).toBe(0);
+  });
+});
+
+describe('difficultyForLevel', () => {
+  it('is neutral on level 0', () => {
+    expect(difficultyForLevel(0)).toEqual({ hp: 1, dmg: 1, speed: 1 });
+  });
+  it('ramps up with the level index', () => {
+    const early = difficultyForLevel(0);
+    const late = difficultyForLevel(5);
+    expect(late.hp).toBeGreaterThan(early.hp);
+    expect(late.dmg).toBeGreaterThan(early.dmg);
+    expect(late.speed).toBeGreaterThan(early.speed);
+  });
+  it('never reduces stats below neutral for negative input', () => {
+    const d = difficultyForLevel(-3);
+    expect(d.hp).toBe(1);
+    expect(d.dmg).toBe(1);
+    expect(d.speed).toBe(1);
   });
 });

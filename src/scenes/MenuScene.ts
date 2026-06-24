@@ -11,6 +11,8 @@ export class MenuScene extends Phaser.Scene {
   create(): void {
     save.load();
     audio.setMuted(save.muted);
+    audio.setSfxVolume(save.sfxVol);
+    audio.setMusicVolume(save.musicVol);
 
     const { width, height } = this.scale;
     this.cameras.main.setBackgroundColor('#05060a');
@@ -40,6 +42,7 @@ export class MenuScene extends Phaser.Scene {
       items.unshift({ label: `CONTINUE (Level ${save.unlocked + 1})`, action: () => this.startLevel(save.unlocked) });
     }
     items.push({ label: 'LEVEL SELECT', action: () => this.showLevelSelect() });
+    items.push({ label: 'SETTINGS', action: () => this.showSettings() });
     items.push({ label: save.muted ? 'SOUND: OFF' : 'SOUND: ON', action: () => this.toggleSound(items) });
     items.push({ label: 'CONTROLS', action: () => this.showControls() });
 
@@ -134,6 +137,52 @@ export class MenuScene extends Phaser.Scene {
       // close if clicked on overlay itself
       if (p.y < 150 || p.y > height - 60) { overlay.destroy(); close.destroy(); this.scene.restart(); }
     });
+  }
+
+  private showSettings(): void {
+    const { width, height } = this.scale;
+    const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.9).setOrigin(0).setInteractive();
+    this.add.text(width / 2, 110, 'SETTINGS', {
+      fontFamily: 'monospace', fontSize: '40px', color: '#ff2d6a', fontStyle: 'bold',
+    }).setOrigin(0.5);
+
+    const drawSlider = (label: string, y: number, getValue: () => number, setValue: (v: number) => void): void => {
+      this.add.text(width / 2 - 180, y, label, {
+        fontFamily: 'monospace', fontSize: '22px', color: '#cfcfe6',
+      }).setOrigin(0, 0.5);
+      const SEGMENTS = 10;
+      const segW = 26, gap = 4;
+      const segs: Phaser.GameObjects.Rectangle[] = [];
+      const repaint = () => {
+        const filled = Math.round(getValue() * SEGMENTS);
+        segs.forEach((s, i) => s.setFillStyle(i < filled ? 0x33ff66 : 0x333344));
+      };
+      for (let i = 0; i < SEGMENTS; i++) {
+        const sx = width / 2 - 60 + i * (segW + gap);
+        const seg = this.add.rectangle(sx, y, segW, 22, 0x333344).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+        seg.on('pointerdown', () => { setValue((i + 1) / SEGMENTS); repaint(); sfx.uiSelect(); });
+        segs.push(seg);
+      }
+      // mute button (sets to 0)
+      const mute = this.add.text(width / 2 - 60 + SEGMENTS * (segW + gap) + 10, y, '✕', {
+        fontFamily: 'monospace', fontSize: '20px', color: '#ff5555',
+      }).setOrigin(0, 0.5).setInteractive({ useHandCursor: true });
+      mute.on('pointerdown', () => { setValue(0); repaint(); });
+      repaint();
+    };
+
+    drawSlider('SFX', height / 2 - 30,
+      () => save.sfxVol,
+      (v) => { save.setSfxVol(v); audio.setSfxVolume(v); if (v > 0) audio.setMuted(false); });
+    drawSlider('MUSIC', height / 2 + 30,
+      () => save.musicVol,
+      (v) => { save.setMusicVol(v); audio.setMusicVolume(v); });
+
+    this.add.text(width / 2, height / 2 + 100, 'click a bar to set volume · click outside to close', {
+      fontFamily: 'monospace', fontSize: '13px', color: '#6a6a99',
+    }).setOrigin(0.5);
+
+    overlay.on('pointerdown', () => { overlay.destroy(); this.scene.restart(); });
   }
 
   private startLevel(index: number): void {

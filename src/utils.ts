@@ -55,3 +55,29 @@ export function weaponRefill(id: string): number {
     default: return 0;
   }
 }
+
+/**
+ * Per-level difficulty multipliers for HP and damage. Keeps early levels
+ * gentle while letting the late campaign hit harder. Indices beyond the
+ * campaign length continue to ramp.
+ */
+export function difficultyForLevel(levelIndex: number): { hp: number; dmg: number; speed: number } {
+  const t = Math.max(0, levelIndex);
+  return {
+    hp: 1 + 0.12 * t,     // +12% enemy HP per level
+    dmg: 1 + 0.08 * t,    // +8% enemy damage per level
+    speed: 1 + 0.03 * t,  // +3% enemy speed per level
+  };
+}
+
+/**
+ * Explosion splash damage with linear falloff.
+ * Full `base` at the center, decaying to ~30% at the radius edge.
+ * `distance` > `radius` yields 0.
+ */
+export function splashDamage(base: number, distance: number, radius: number): number {
+  if (radius <= 0) return 0;
+  if (distance > radius) return 0;
+  const falloff = 1 - 0.7 * (distance / radius);
+  return Math.max(0, base * falloff);
+}

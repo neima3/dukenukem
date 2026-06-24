@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { GAME } from '../config';
-import { segmentAABB, weaponRefill } from '../utils';
+import { segmentAABB, weaponRefill, splashDamage, difficultyForLevel } from '../utils';
 import { LEVELS, type LevelData, type PickupSpawn, type EnemyType, type BossType } from '../levels/levelData';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/enemies/Enemy';
@@ -55,6 +55,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
   bossSpawned = false;
   exitOpen = false;
   pipes: Projectile[] = [];
+  bossWalls: Phaser.GameObjects.Rectangle[] = [];
 
   hud!: HUDLike;
   private bg!: Phaser.GameObjects.Container;
@@ -149,7 +150,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
     // pause key
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause());
 
-    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => music.stop());
+    this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => { music.stop(); this.time.timeScale = 1; });
   }
 
   update(time: number, dt: number): void {
@@ -297,6 +298,12 @@ export class GameScene extends Phaser.Scene implements GameLike {
       case 'drone': e = new SentryDrone(this, x, y); break;
       case 'heavy': e = new HeavyGunner(this, x, y); break;
     }
+    // per-level difficulty ramp
+    const diff = difficultyForLevel(this.levelIndex);
+    e.maxHealth = Math.round(e.maxHealth * diff.hp);
+    e.health = e.maxHealth;
+    e.damage = Math.round(e.damage * diff.dmg);
+    e.speed *= diff.speed;
     return e;
   }
 
@@ -325,10 +332,14 @@ export class GameScene extends Phaser.Scene implements GameLike {
   private spawnBoss(kind: BossType): void {
     this.bossSpawned = true;
     this.exitOpen = false;
-    // lock arena: add wall ahead of player
+    // lock the arena: walls ahead of and behind the player so the fight is contained
     const wallX = this.player.x + 360;
-    const wall = this.add.rectangle(wallX, this.level.groundY, 40, 400, this.level.palette.tileDark).setOrigin(0.5, 0);
-    this.solids.add(wall, true);
+    const backX = this.player.x - 200;
+    this.bossWalls = [
+      this.add.rectangle(wallX, this.level.groundY, 40, 400, this.level.palette.tileDark).setOrigin(0.5, 0),
+      this.add.rectangle(backX, this.level.groundY, 40, 400, this.level.palette.tileDark).setOrigin(0.5, 0),
+    ];
+    for (const w of this.bossWalls) this.solids.add(w, true);
     let boss: Boss;
     switch (kind) {
       case 'tank': boss = new HoverTank(this, wallX + 200, this.level.groundY - 60); break;
@@ -336,7 +347,17 @@ export class GameScene extends Phaser.Scene implements GameLike {
       case 'lord': boss = new AlienOverlord(this, wallX + 240, this.level.groundY - 200); break;
     }
     this.hud.showBossBar(boss.name);
-    this.dialogue.say('BOSS!', this.level.palette.accent);
+    // dramatic telegraph: slow-mo + flash + named banner
+    this.time.timeScale = 0.35;
+    this.cameras.main.flash(700, 255, 80, 80);
+    this.add.text(this.cameras.main.worldView.centerX, this.level.groundY - 240, boss.name, {
+      fontFamily: 'monospace', fontSize: '52px', color: '#ff2d6a', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(70).setAlpha(0);
+    this.tweens.add({ targets: [this], timeScale: { from: 0.35, to: 1 }, duration: 900 });
+    const banner = this.add.text(this.cameras.main.worldView.centerX, this.level.groundY - 240, 'BOSS', {
+      fontFamily: 'monospace', fontSize: '64px', color: '#ffcc33', fontStyle: 'bold',
+    }).setOrigin(0.5).setDepth(71).setAlpha(0);
+    this.tweens.add({ targets: banner, alpha: 1, duration: 200, yoyo: true, hold: 600, onComplete: () => banner.destroy() });
   }
 
   // ---- combat callbacks ----
@@ -345,7 +366,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
     // pipe bombs are thrown, not contact-fused: pass through enemies until detonated
     if (pr.weapon === 'pipebomb') return;
     if (pr.isExplosive) {
-      this.explode(pr.x, pr.y, pr.explosionRadius);
+      this.explode(pr.x, pr.y, pr.explosionRadius, pr.damage);
       pr.deactivate();
     } else {
       e.takeDamage(pr.damage);
@@ -358,7 +379,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
     if (!pr.active || !b.alive) return;
     if (pr.weapon === 'pipebomb') return;
     if (pr.isExplosive) {
-      this.explode(pr.x, pr.y, pr.explosionRadius);
+      this.explode(pr.x, pr.y, pr.explosionRadius, pr.damage);
       pr.deactivate();
     } else {
       b.takeDamage(pr.damage);
@@ -376,7 +397,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
       return;
     }
     if (pr.isExplosive) {
-      this.explode(pr.x, pr.y, pr.explosionRadius);
+      this.explode(pr.x, pr.y, pr.explosionRadius, pr.damage);
       pr.deactivate();
     } else {
       pr.deactivate();
@@ -389,30 +410,34 @@ export class GameScene extends Phaser.Scene implements GameLike {
     }
   }
 
-  private explode(x: number, y: number, r: number): void {
+  private explode(x: number, y: number, r: number, baseDamage = 60): void {
     this.particles.explosion(x, y, r);
     this.shake(10, 300);
-    // damage enemies in radius
+    // splash with linear falloff, scaled per weapon
     this.enemies.getChildren().forEach((e) => {
       const en = e as Enemy;
-      if (en.alive && Phaser.Math.Distance.Between(x, y, en.x, en.y - en.height / 2) < r) {
-        en.takeDamage(60);
+      if (en.alive) {
+        const d = Phaser.Math.Distance.Between(x, y, en.x, en.y - en.height / 2);
+        if (d <= r) en.takeDamage(splashDamage(baseDamage, d, r));
       }
     });
     this.bosses.getChildren().forEach((b) => {
       const bo = b as Boss;
-      if (bo.alive && Phaser.Math.Distance.Between(x, y, bo.x, bo.y - bo.height / 2) < r) bo.takeDamage(45);
+      if (bo.alive) {
+        const d = Phaser.Math.Distance.Between(x, y, bo.x, bo.y - bo.height / 2);
+        if (d <= r) bo.takeDamage(splashDamage(baseDamage, d, r));
+      }
     });
-    if (Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y - 20) < r) {
-      this.player.takeDamage(8);
-    }
+    // self-splash: gentler (⅓) so rockets aren't punishing at the edge
+    const pd = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y - 20);
+    if (pd <= r) this.player.takeDamage(splashDamage(baseDamage, pd, r) * 0.33);
   }
 
   detonatePipes(): void {
     const armed = this.pipes.filter((p) => p.active);
     if (armed.length === 0) return;
     armed.forEach((p) => {
-      this.explode(p.x, p.y, 140);
+      this.explode(p.x, p.y, 140, 120);
       p.deactivate();
     });
     this.cleanupPipes();
@@ -425,7 +450,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
     for (const p of this.pipes) {
       if (!p.active) continue;
       if (p.born >= p.lifeMs) {
-        this.explode(p.x, p.y, 140);
+        this.explode(p.x, p.y, 140, 120);
         p.deactivate();
       }
     }
@@ -513,6 +538,13 @@ export class GameScene extends Phaser.Scene implements GameLike {
   onBossKilled(_b: Boss): void {
     this.score += _b.scoreValue;
     this.exitOpen = true;
+    // tear down the arena walls so the player can reach the exit
+    for (const w of this.bossWalls) {
+      this.solids.remove(w);
+      w.destroy();
+    }
+    this.bossWalls = [];
+    this.time.timeScale = 1;
     this.time.delayedCall(1400, () => {
       this.add.text(this.cameras.main.worldView.centerX, this.level.groundY - 220, 'EXIT OPEN', {
         fontFamily: 'monospace', fontSize: '36px', color: '#33ff66', fontStyle: 'bold',
