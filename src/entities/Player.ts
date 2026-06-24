@@ -151,16 +151,16 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (input.left) vx -= speed;
     if (input.right) vx += speed;
 
+    // grounded must be current-frame before crouch/jetpack/coyote read it
+    this.grounded = this.body!.blocked.down || this.body!.touching.down;
+    if (this.grounded) { this.coyote = 120; this.jumpsLeft = 1; }
+    else this.coyote -= dt;
+
     // crouch
     this.crouching = input.down && this.grounded && !this.jetpacking;
     if (this.crouching) vx *= 0.4;
 
     this.setVelocityX(vx);
-
-    // jump (with coyote time)
-    this.grounded = this.body!.blocked.down || this.body!.touching.down;
-    if (this.grounded) { this.coyote = 120; this.jumpsLeft = 1; }
-    else this.coyote -= dt;
 
     if (input.jumpPressed && this.coyote > 0) {
       this.setVelocityY(-GAME.PLAYER_JUMP);
@@ -205,8 +205,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     } else {
       this.setAngle(0);
     }
-    // crouch squish
-    this.setScale(this.crouching ? 1 : 1, this.crouching ? 0.85 : 1);
+    // crouch squish (visual only)
+    this.setScale(1, this.crouching ? 0.85 : 1);
 
     // tint pulse when low health
     if (this.health <= 25 && this.invuln <= 0) {
@@ -215,8 +215,6 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.clearTint();
     }
   }
-
-  drawWeaponHint(_g: Phaser.GameObjects.Graphics): void { void _g; }
 }
 
 export { COLORS };

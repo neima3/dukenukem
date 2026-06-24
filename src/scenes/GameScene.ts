@@ -483,13 +483,21 @@ export class GameScene extends Phaser.Scene implements GameLike {
   }
 
   private killEnemyProjectile(s: Phaser.Physics.Arcade.Sprite): void {
-    if (s.active) { this.particles.sparks(s.x, s.y); s.disableBody(true, true); }
+    if (!s.active) return;
+    const e = s as EnemyProjectile;
+    this.particles.sparks(s.x, s.y);
+    if (e.explosive) this.explode(s.x, s.y, 90, e.damage || 14);
+    s.disableBody(true, true);
   }
 
   hitPlayer(pr: Projectile | EnemyProjectile): void {
     const e = pr as EnemyProjectile;
     if (!e.active) return;
-    this.player.takeDamage(e.damage ?? 10, e.x);
+    if (e.explosive) {
+      this.explode(e.x, e.y, 90, e.damage || 14);
+    } else {
+      this.player.takeDamage(e.damage ?? 10, e.x);
+    }
     this.killEnemyProjectile(e);
   }
 
