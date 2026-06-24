@@ -64,10 +64,11 @@ export class GameScene extends Phaser.Scene implements GameLike {
 
   constructor() { super('Game'); }
 
-  init(data: { level: number }) {
+  init(data: { level: number; score?: number }) {
     this.levelIndex = data.level ?? 0;
     this.level = LEVELS[this.levelIndex];
-    this.score = 0;
+    // carry the running score across levels; reset only on a fresh campaign
+    this.score = data.score ?? 0;
     this.secretsFound = 0;
     this.combo = 0;
     this.dying = false;
@@ -149,6 +150,8 @@ export class GameScene extends Phaser.Scene implements GameLike {
 
     // pause key
     this.input.keyboard?.on('keydown-ESC', () => this.togglePause());
+    // quit-to-menu from pause (registered once; gated on paused so it can't stack)
+    this.input.keyboard?.on('keydown-Q', () => { if (this.paused) { music.stop(); this.scene.start('Menu'); } });
 
     this.events.on(Phaser.Scenes.Events.SHUTDOWN, () => { music.stop(); this.time.timeScale = 1; });
   }
@@ -242,21 +245,23 @@ export class GameScene extends Phaser.Scene implements GameLike {
         (rcol << 16) | (gcol << 8) | bcol).setOrigin(0, 0);
       this.bg.add(r);
     }
-    // parallax silhouette layer
+    // parallax silhouette layer: a row of building rectangles
     const l2 = this.add.renderTexture(0, 0, w, h).setOrigin(0, 0).setDepth(-8).setScrollFactor(0.5);
     l2.fill(pal.bg1, 1);
-    for (let i = 0; i < w / 160; i++) {
+    for (let bx = 0; bx < w; bx += 160) {
+      const bw = Phaser.Math.Between(80, 150);
       const bh = Phaser.Math.Between(140, 320);
-      l2.fill(pal.tileDark, 1);
-      void bh;
+      l2.fill(pal.tileDark, 1, bx, h - bh, bw, bh);
     }
-    // stars in far back
-    const star = this.add.particles(0, 0, 'pix', {
-      x: { min: 0, max: w }, y: { min: 0, max: h * 0.7 },
-      lifespan: 0, quantity: 0, scale: { start: 0.5, end: 0.5 },
-      alpha: { min: 0.2, max: 0.6 }, tint: 0xffffff,
-    });
-    star.setDepth(-9).setScrollFactor(0.15);
+    // far-back stars (static field, cheap)
+    const starCount = Math.min(200, Math.floor(w / 6));
+    const starWrap = this.add.container(0, 0).setDepth(-9).setScrollFactor(0.15);
+    for (let i = 0; i < starCount; i++) {
+      const s = this.add.rectangle(
+        Phaser.Math.Between(0, w), Phaser.Math.Between(0, h * 0.7),
+        2, 2, 0xffffff, Phaser.Math.FloatBetween(0.2, 0.7));
+      starWrap.add(s);
+    }
   }
 
   private buildSolids(): void {
@@ -347,17 +352,18 @@ export class GameScene extends Phaser.Scene implements GameLike {
       case 'lord': boss = new AlienOverlord(this, wallX + 240, this.level.groundY - 200); break;
     }
     this.hud.showBossBar(boss.name);
-    // dramatic telegraph: slow-mo + flash + named banner
+    // dramatic telegraph: slow-mo that ramps back, plus a flash + named banner
     this.time.timeScale = 0.35;
     this.cameras.main.flash(700, 255, 80, 80);
-    this.add.text(this.cameras.main.worldView.centerX, this.level.groundY - 240, boss.name, {
+    // NOTE: timeScale lives on the Clock, so tween this.time (not the scene)
+    this.tweens.add({ targets: this.time, timeScale: { from: 0.35, to: 1 }, duration: 900 });
+    const banner = this.add.text(this.cameras.main.worldView.centerX, this.level.groundY - 240, boss.name, {
       fontFamily: 'monospace', fontSize: '52px', color: '#ff2d6a', fontStyle: 'bold',
     }).setOrigin(0.5).setDepth(70).setAlpha(0);
-    this.tweens.add({ targets: [this], timeScale: { from: 0.35, to: 1 }, duration: 900 });
-    const banner = this.add.text(this.cameras.main.worldView.centerX, this.level.groundY - 240, 'BOSS', {
-      fontFamily: 'monospace', fontSize: '64px', color: '#ffcc33', fontStyle: 'bold',
-    }).setOrigin(0.5).setDepth(71).setAlpha(0);
-    this.tweens.add({ targets: banner, alpha: 1, duration: 200, yoyo: true, hold: 600, onComplete: () => banner.destroy() });
+    this.tweens.add({
+      targets: banner, alpha: { from: 0, to: 1 }, duration: 220,
+      hold: 700, yoyo: true, onComplete: () => banner.destroy(),
+    });
   }
 
   // ---- combat callbacks ----
@@ -413,21 +419,20 @@ export class GameScene extends Phaser.Scene implements GameLike {
   private explode(x: number, y: number, r: number, baseDamage = 60): void {
     this.particles.explosion(x, y, r);
     this.shake(10, 300);
-    // splash with linear falloff, scaled per weapon
-    this.enemies.getChildren().forEach((e) => {
-      const en = e as Enemy;
-      if (en.alive) {
-        const d = Phaser.Math.Distance.Between(x, y, en.x, en.y - en.height / 2);
-        if (d <= r) en.takeDamage(splashDamage(baseDamage, d, r));
-      }
-    });
-    this.bosses.getChildren().forEach((b) => {
-      const bo = b as Boss;
-      if (bo.alive) {
-        const d = Phaser.Math.Distance.Between(x, y, bo.x, bo.y - bo.height / 2);
-        if (d <= r) bo.takeDamage(splashDamage(baseDamage, d, r));
-      }
-    });
+    // iterate snapshots: takeDamage()->die()->destroy() splices the live group array,
+    // which would make forEach skip the element right after a kill
+    const enemies = [...this.enemies.getChildren()] as Enemy[];
+    const bosses = [...this.bosses.getChildren()] as Boss[];
+    for (const en of enemies) {
+      if (!en.alive) continue;
+      const d = Phaser.Math.Distance.Between(x, y, en.x, en.y - en.height / 2);
+      if (d <= r) en.takeDamage(splashDamage(baseDamage, d, r));
+    }
+    for (const bo of bosses) {
+      if (!bo.alive) continue;
+      const d = Phaser.Math.Distance.Between(x, y, bo.x, bo.y - bo.height / 2);
+      if (d <= r) bo.takeDamage(splashDamage(baseDamage, d, r));
+    }
     // self-splash: gentler (⅓) so rockets aren't punishing at the edge
     const pd = Phaser.Math.Distance.Between(x, y, this.player.x, this.player.y - 20);
     if (pd <= r) this.player.takeDamage(splashDamage(baseDamage, pd, r) * 0.33);
@@ -478,8 +483,10 @@ export class GameScene extends Phaser.Scene implements GameLike {
     s.setDepth(7);
     s.setScale(1.4);
     s.setAngle(Phaser.Math.RadToDeg(Math.atan2(vy, vx)));
-    // auto-recycle after 3s if it hasn't hit anything
-    this.time.delayedCall(3000, () => { if (s.active) this.killEnemyProjectile(s); });
+    // tag this shot so a stale timer from a recycled sprite can't kill the new one
+    const shot = s as EnemyProjectile & { _shotId?: number };
+    const id = (shot._shotId = (shot._shotId ?? 0) + 1);
+    this.time.delayedCall(3000, () => { if (shot._shotId === id && shot.active) this.killEnemyProjectile(shot); });
   }
 
   private killEnemyProjectile(s: Phaser.Physics.Arcade.Sprite): void {
@@ -507,7 +514,8 @@ export class GameScene extends Phaser.Scene implements GameLike {
       case 'health': this.player.heal(35); break;
       case 'armor': this.player.addArmor(40); break;
       case 'ammo':
-        if (p.weapon) { this.player.addAmmo(p.weapon, weaponRefill(p.weapon)); this.dialogue.pickup(p.x, p.y); }
+        this.player.addAmmo(p.weapon ?? this.player.currentWeaponId, weaponRefill(p.weapon ?? this.player.currentWeaponId));
+        this.dialogue.pickup(p.x, p.y);
         break;
       case 'fuel': this.player.addFuel(60); break;
       case 'weapon':
@@ -521,7 +529,10 @@ export class GameScene extends Phaser.Scene implements GameLike {
         break;
     }
     this.particles.pickup(p.x, p.y);
-    if (p.pickupKind !== 'secret') sfx.pickup();
+    // distinct sfx per pickup (armor has its own; secrets chime; others blip)
+    if (p.pickupKind === 'armor') sfx.armor();
+    else if (p.pickupKind === 'secret') sfx.secret();
+    else sfx.pickup();
     p.destroy();
   }
 
@@ -577,7 +588,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
     this.cameras.main.fade(600, 0, 0, 0);
     this.time.delayedCall(700, () => {
       if (isLast) this.scene.start('Victory', { score: this.score });
-      else this.scene.start('Game', { level: this.levelIndex + 1 });
+      else this.scene.start('Game', { level: this.levelIndex + 1, score: this.score });
     });
   }
 
@@ -612,7 +623,6 @@ export class GameScene extends Phaser.Scene implements GameLike {
         fontFamily: 'monospace', fontSize: '36px', color: '#ffcc33', align: 'center',
       }).setOrigin(0.5).setScrollFactor(0).setDepth(100);
       this.pauseText.setDepth(100);
-      this.input.keyboard?.once('keydown-Q', () => { music.stop(); this.scene.start('Menu'); });
     } else {
       this.physics.resume();
       music.play(this.level.music);

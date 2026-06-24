@@ -111,15 +111,12 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   heal(amount: number): void {
     this.health = Math.min(this.maxHealth, this.health + amount);
-    sfx.pickup();
   }
   addArmor(amount: number): void {
     this.armor = Math.min(this.maxArmor, this.armor + amount);
-    sfx.armor();
   }
   addFuel(amount: number): void {
     this.fuel = Math.min(this.maxFuel, this.fuel + amount);
-    sfx.pickup();
   }
 
   private die(): void {

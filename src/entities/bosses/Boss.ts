@@ -69,6 +69,7 @@ export abstract class Boss extends Phaser.Physics.Arcade.Sprite {
   }
 
   touchPlayer(): void {
+    if (!this.alive) return;
     this.scene.player.takeDamage(this.damage, this.x);
   }
 

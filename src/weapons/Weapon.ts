@@ -126,8 +126,10 @@ export abstract class Weapon {
 
   protected fire(scene: GameLike, x: number, y: number, angle: number): void {
     for (let i = 0; i < this.def.projectiles; i++) {
-      const spread = (this.def.spread > 0)
-        ? (i / Math.max(1, this.def.projectiles - 1) - 0.5) * this.def.spread * 2
+      // multi-projectile weapons (shotgun) spread pellets evenly across the cone;
+      // single-projectile weapons use a random offset within the cone.
+      const spread = (this.def.projectiles > 1)
+        ? (i / (this.def.projectiles - 1) - 0.5) * this.def.spread * 2
         : (Math.random() - 0.5) * this.def.spread * 2;
       const a = angle + spread;
       const vx = Math.cos(a) * this.def.speed;

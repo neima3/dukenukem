@@ -10,9 +10,8 @@ export class InputSystem {
     const kb = scene.input.keyboard!;
     this.cursors = kb.createCursorKeys();
     this.keys = kb.addKeys('W,A,S,D,R,E,Q,ONE,TWO,THREE,FOUR,FIVE,SIX,P,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
-    // mouse wheel weapon cycling
-    scene.input.on('wheel', (_pointer: Phaser.Input.Pointer, _ox: number, _oy: number, deltas: Phaser.Input.InputPlugin) => {
-      const dy = (deltas as unknown as { y: number }).y;
+    // mouse wheel weapon cycling. Phaser emits (pointer, currentlyOver, dx, dy, dz).
+    scene.input.on('wheel', (_pointer: Phaser.Input.Pointer, _over: unknown, _dx: number, dy: number) => {
       if (dy > 0) this.wheelCycle = 1;
       else if (dy < 0) this.wheelCycle = -1;
     });

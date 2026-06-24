@@ -94,6 +94,7 @@ export class HUDScene extends Phaser.Scene {
         this._lowAmmoTween = this.tweens.add({ targets: this.ammoTxt, alpha: 0.4, duration: 220, yoyo: true, repeat: 3, onComplete: () => { this._lowAmmoTween = undefined; } });
       }
     } else {
+      if (this._lowAmmoTween) { this._lowAmmoTween.stop(); this._lowAmmoTween = undefined; }
       this.ammoTxt.setAlpha(1);
     }
     this.weaponIcon.setTexture(ICONS[w.id]);
