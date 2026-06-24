@@ -591,7 +591,14 @@ export class GameScene extends Phaser.Scene implements GameLike {
     }
     return true;
   }
-  shake(intensity: number, duration: number): void { this.cameras.main.shake(duration, intensity / 1000); }
+  shake(intensity: number, duration: number): void {
+    // honor the OS-level reduced-motion preference
+    if (this._reducedMotion) { this.cameras.main.shake(Math.min(duration, 60), intensity / 4000); return; }
+    this.cameras.main.shake(duration, intensity / 1000);
+  }
+  private get _reducedMotion(): boolean {
+    return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  }
 
   togglePause(): void {
     if (this.dying) return;

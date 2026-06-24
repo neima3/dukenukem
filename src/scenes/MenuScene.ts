@@ -48,22 +48,42 @@ export class MenuScene extends Phaser.Scene {
 
     let y = 330;
     const entries: Phaser.GameObjects.Text[] = [];
-    for (const it of items) {
+    const actions: (() => void)[] = [];
+    items.forEach((it, i) => {
       const t = this.add.text(width / 2, y, it.label, {
         fontFamily: 'monospace', fontSize: '26px', color: '#cfcfe6',
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });
       t.on('pointerover', () => { t.setColor('#ffcc33'); sfx.uiSelect(); });
-      t.on('pointerout', () => t.setColor('#cfcfe6'));
+      t.on('pointerout', () => t.setColor(i === this._menuSel ? '#ffcc33' : '#cfcfe6'));
       t.on('pointerdown', () => { sfx.uiSelect(); it.action(); });
       entries.push(t);
+      actions.push(it.action);
       y += 54;
-    }
+    });
+
+    // keyboard-only navigation (accessibility)
+    this._menuEntries = entries;
+    this._menuActions = actions;
+    this._menuSel = Math.min(this._menuSel, entries.length - 1);
+    this._paintMenu();
+    const kb = this.input.keyboard!;
+    kb.removeAllListeners('keydown-UP'); kb.removeAllListeners('keydown-DOWN'); kb.removeAllListeners('keydown-ENTER');
+    kb.on('keydown-UP', () => { this._menuSel = (this._menuSel + entries.length - 1) % entries.length; this._paintMenu(); sfx.uiSelect(); });
+    kb.on('keydown-DOWN', () => { this._menuSel = (this._menuSel + 1) % entries.length; this._paintMenu(); sfx.uiSelect(); });
+    kb.on('keydown-ENTER', () => { sfx.uiSelect(); actions[this._menuSel]?.(); });
 
     this.add.text(width / 2, height - 30, `HIGH SCORE: ${save.highScore.toString().padStart(6, '0')}`, {
       fontFamily: 'monospace', fontSize: '16px', color: '#7a7a99',
     }).setOrigin(0.5);
 
     music.play('menu');
+  }
+
+  private _menuEntries: Phaser.GameObjects.Text[] = [];
+  private _menuActions: (() => void)[] = [];
+  private _menuSel = 0;
+  private _paintMenu(): void {
+    this._menuEntries.forEach((t, i) => t.setColor(i === this._menuSel ? '#ffcc33' : '#cfcfe6'));
   }
 
   private toggleSound(items: { label: string }[]): void {
