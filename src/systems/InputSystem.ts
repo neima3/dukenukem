@@ -4,11 +4,18 @@ import Phaser from 'phaser';
 export class InputSystem {
   private cursors: Phaser.Types.Input.Keyboard.CursorKeys;
   private keys: Record<string, Phaser.Input.Keyboard.Key>;
+  private wheelCycle = 0;
 
   constructor(scene: Phaser.Scene) {
     const kb = scene.input.keyboard!;
     this.cursors = kb.createCursorKeys();
     this.keys = kb.addKeys('W,A,S,D,R,E,Q,ONE,TWO,THREE,FOUR,FIVE,SIX,P,SPACE,SHIFT') as Record<string, Phaser.Input.Keyboard.Key>;
+    // mouse wheel weapon cycling
+    scene.input.on('wheel', (_pointer: Phaser.Input.Pointer, _ox: number, _oy: number, deltas: Phaser.Input.InputPlugin) => {
+      const dy = (deltas as unknown as { y: number }).y;
+      if (dy > 0) this.wheelCycle = 1;
+      else if (dy < 0) this.wheelCycle = -1;
+    });
   }
 
   get left(): boolean { return this.cursors.left.isDown || this.keys.A.isDown; }
@@ -26,6 +33,13 @@ export class InputSystem {
   isInteractPressed(): boolean { return Phaser.Input.Keyboard.JustDown(this.keys.E); }
   isDetonatePressed(): boolean { return Phaser.Input.Keyboard.JustDown(this.keys.Q); }
   isPausePressed(): boolean { return Phaser.Input.Keyboard.JustDown(this.keys.P); }
+
+  /** Returns +1 / -1 for a mouse-wheel tick since last call, then resets. */
+  consumeWheelCycle(): number {
+    const c = this.wheelCycle;
+    this.wheelCycle = 0;
+    return c;
+  }
 
   weaponKey(): number | null {
     if (Phaser.Input.Keyboard.JustDown(this.keys.ONE)) return 1;

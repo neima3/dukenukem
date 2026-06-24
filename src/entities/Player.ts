@@ -136,9 +136,13 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
     // facing + aim
     const pointer = this.scene.input.activePointer;
-    const targetAngle = Phaser.Math.Angle.Between(this.x, this.y - 20, pointer.worldX, pointer.worldY);
+    const targetAngle = input.aimOverride != null
+      ? input.aimOverride
+      : Phaser.Math.Angle.Between(this.x, this.y - 20, pointer.worldX, pointer.worldY);
     this.fireAngle = targetAngle;
-    this.facing = pointer.worldX < this.x ? -1 : 1;
+    this.facing = input.aimOverride != null
+      ? (Math.cos(targetAngle) >= 0 ? 1 : -1)
+      : (pointer.worldX < this.x ? -1 : 1);
     this.setFlipX(this.facing < 0);
 
     // horizontal movement

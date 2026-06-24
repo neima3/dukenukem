@@ -24,6 +24,7 @@ export class HUDScene extends Phaser.Scene {
   private bossBarFill!: Phaser.GameObjects.Rectangle;
   private bossNameTxt!: Phaser.GameObjects.Text;
   private dmgVignette!: Phaser.GameObjects.Rectangle;
+  private _lowAmmoTween?: Phaser.Tweens.Tween;
 
   constructor() { super('HUD'); }
 
@@ -81,7 +82,20 @@ export class HUDScene extends Phaser.Scene {
     this.healthTxt.setText(`${Math.ceil(p.health)}`);
     const w = p.currentWeapon;
     this.weaponName.setText(w.name);
-    this.ammoTxt.setText(w.ammo === Infinity ? '∞' : `${w.ammo}`);
+    const ammo = w.ammo;
+    this.ammoTxt.setText(ammo === Infinity ? '∞' : `${ammo}`);
+    // low-ammo feedback (skip the infinite-ammo pistol)
+    const lowAmmo = ammo !== Infinity && ammo <= Math.max(4, (w.maxAmmo * 0.12));
+    this.ammoTxt.setColor(lowAmmo ? '#ff3344' : '#ffffff');
+    if (lowAmmo) {
+      this.ammoTxt.setText(`${ammo}  LOW`);
+      // gentle pulse on the ammo counter
+      if (!this._lowAmmoTween) {
+        this._lowAmmoTween = this.tweens.add({ targets: this.ammoTxt, alpha: 0.4, duration: 220, yoyo: true, repeat: 3, onComplete: () => { this._lowAmmoTween = undefined; } });
+      }
+    } else {
+      this.ammoTxt.setAlpha(1);
+    }
     this.weaponIcon.setTexture(ICONS[w.id]);
     this.scoreTxt.setText('SCORE ' + this.game_scene.score.toString().padStart(6, '0'));
     this.secretTxt.setText(`SECRETS ${this.game_scene.secretsFound}/${this.game_scene.secretsTotal}`);

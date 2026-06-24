@@ -1,4 +1,5 @@
 import { PALETTES, type Palette, type WeaponId } from '../config';
+import { mulberry32 } from '../utils';
 
 export type EnemyType = 'lizard' | 'brain' | 'pig' | 'drone' | 'heavy';
 export type BossType = 'tank' | 'worm' | 'lord';
@@ -78,16 +79,6 @@ export const LEVEL_META: Array<{
     enemyPool: ['pig', 'heavy', 'drone', 'brain'], hazards: true, vertical: false,
   },
 ];
-
-function mulberry32(seed: number): () => number {
-  let a = seed;
-  return function () {
-    a |= 0; a = (a + 0x6D2B79F5) | 0;
-    let t = Math.imul(a ^ (a >>> 15), 1 | a);
-    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
-    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
-  };
-}
 
 /** Generate a fully-playable LevelData from metadata. Deterministic per index. */
 export function buildLevel(index: number): LevelData {

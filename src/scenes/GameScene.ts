@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { GAME } from '../config';
+import { segmentAABB, weaponRefill } from '../utils';
 import { LEVELS, type LevelData, type PickupSpawn, type EnemyType, type BossType } from '../levels/levelData';
 import { Player } from '../entities/Player';
 import { Enemy } from '../entities/enemies/Enemy';
@@ -16,6 +17,7 @@ import { Projectile, ProjectilePool, type GameLike } from '../weapons/Weapon';
 import { ParticleSystem } from '../systems/ParticleSystem';
 import { DialogueSystem } from '../systems/DialogueSystem';
 import { InputSystem } from '../systems/InputSystem';
+import { TouchControls } from '../systems/TouchControls';
 import { audio } from '../systems/AudioSystem';
 import { music } from '../audio/musicGen';
 import { sfx } from '../audio/sfxGen';
@@ -25,6 +27,7 @@ export type Inputs = {
   left: boolean; right: boolean; up: boolean; down: boolean;
   jumpPressed: boolean; jumpHeld: boolean; fire: boolean;
   weaponSlot: number | null; cycle: number; detonate: boolean;
+  aimOverride: number | null; // touch auto-aim angle toward nearest enemy
 };
 
 export class GameScene extends Phaser.Scene implements GameLike {
@@ -40,6 +43,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
   particles!: ParticleSystem;
   dialogue!: DialogueSystem;
   inputSys!: InputSystem;
+  touch!: TouchControls;
 
   score = 0;
   secretsFound = 0;
@@ -93,6 +97,8 @@ export class GameScene extends Phaser.Scene implements GameLike {
     this.particles = new ParticleSystem(this);
     this.dialogue = new DialogueSystem(this);
     this.inputSys = new InputSystem(this);
+    this.touch = new TouchControls(this);
+    this.touch.create();
 
     this.spawnLevelEntities();
 
@@ -108,7 +114,6 @@ export class GameScene extends Phaser.Scene implements GameLike {
     this.physics.add.overlap(this.enemyProjectiles, this.player, (pr) => this.hitPlayer(pr as Projectile));
     this.physics.add.overlap(this.enemyProjectiles, this.solids, (pr) => this.killEnemyProjectile(pr as Phaser.Physics.Arcade.Sprite));
     this.physics.add.overlap(this.player, this.pickups, (_p, pk) => this.collectPickup(pk as PickupSprite));
-    this.physics.add.overlap(this.player, this.solids);
 
     // hazards (damage zones) handled via zone overlaps
     this.level.hazards.forEach((h) => {
@@ -151,11 +156,14 @@ export class GameScene extends Phaser.Scene implements GameLike {
     if (this.paused) return;
     const inp = this.makeInputs();
     if (this.player.active) this.player.update(time, dt, inp);
+    this._prevTouchJump = this.touch.state.jump;
     // combo decay
     if (this.combo > 0) {
       this.comboTimer -= dt;
       if (this.comboTimer <= 0) this.combo = 0;
     }
+    // pipe bomb lifecycle (auto-detonate expired)
+    this.updatePipes(dt);
     // boss trigger
     if (!this.bossSpawned && this.level.boss && this.player.x > this.level.bossAt) {
       this.spawnBoss(this.level.boss);
@@ -169,18 +177,51 @@ export class GameScene extends Phaser.Scene implements GameLike {
   makeInputs(): Inputs {
     const inp = this.inputSys;
     const pointer = this.input.activePointer;
+    const t = this.touch.state;
+    const fire = pointer.isDown || t.fire;
+    // touch auto-aim: snap toward the nearest enemy when firing on a touch device
+    let aimOverride: number | null = null;
+    if (this.touch.enabled && t.fire) {
+      const nearest = this.nearestEnemyTo(this.player.x, this.player.y - 20);
+      if (nearest) {
+        const e = nearest as Enemy;
+        aimOverride = Phaser.Math.Angle.Between(this.player.x, this.player.y - 20, e.x, e.y - e.height / 2);
+      } else {
+        aimOverride = this.player.facing >= 0 ? 0 : Math.PI;
+      }
+    }
     return {
-      left: inp.left,
-      right: inp.right,
+      left: inp.left || t.left,
+      right: inp.right || t.right,
       up: inp.up,
       down: inp.down,
-      jumpPressed: inp.isJumpPressed(),
-      jumpHeld: inp.jumpHeld,
-      fire: pointer.isDown,
+      jumpPressed: inp.isJumpPressed() || (t.jump && !this._prevTouchJump),
+      jumpHeld: inp.jumpHeld || t.jump,
+      fire,
       weaponSlot: inp.weaponKey(),
-      cycle: 0,
-      detonate: inp.isDetonatePressed(),
+      cycle: inp.consumeWheelCycle(),
+      detonate: inp.isDetonatePressed() || t.detonate,
+      aimOverride,
     };
+  }
+
+  private _prevTouchJump = false;
+
+  /** Nearest living enemy or boss to a point. */
+  private nearestEnemyTo(x: number, y: number): Enemy | Boss | null {
+    let best: Enemy | Boss | null = null;
+    let bestD = Infinity;
+    for (const e of this.enemies.getChildren() as Enemy[]) {
+      if (!e.alive) continue;
+      const d = (e.x - x) ** 2 + (e.y - y) ** 2;
+      if (d < bestD) { bestD = d; best = e; }
+    }
+    for (const b of this.bosses.getChildren() as Boss[]) {
+      if (!b.alive) continue;
+      const d = (b.x - x) ** 2 + (b.y - y) ** 2;
+      if (d < bestD) { bestD = d; best = b; }
+    }
+    return best;
   }
 
   // ---- world building ----
@@ -301,8 +342,9 @@ export class GameScene extends Phaser.Scene implements GameLike {
   // ---- combat callbacks ----
   hitEnemy(pr: Projectile, e: Enemy): void {
     if (!pr.active || !e.alive) return;
-    if (pr.weapon === 'pipebomb' && pr.armed) return; // pipe bombs sit as armed=false? armed=false means thrown; handle detonation separately
-    if (pr.isExplosive && pr.armed) {
+    // pipe bombs are thrown, not contact-fused: pass through enemies until detonated
+    if (pr.weapon === 'pipebomb') return;
+    if (pr.isExplosive) {
       this.explode(pr.x, pr.y, pr.explosionRadius);
       pr.deactivate();
     } else {
@@ -314,7 +356,8 @@ export class GameScene extends Phaser.Scene implements GameLike {
 
   hitBoss(pr: Projectile, b: Boss): void {
     if (!pr.active || !b.alive) return;
-    if (pr.isExplosive && pr.armed) {
+    if (pr.weapon === 'pipebomb') return;
+    if (pr.isExplosive) {
       this.explode(pr.x, pr.y, pr.explosionRadius);
       pr.deactivate();
     } else {
@@ -326,17 +369,23 @@ export class GameScene extends Phaser.Scene implements GameLike {
 
   hitSolid(pr: Projectile, s: any): void {
     if (!pr.active) return;
-    if (pr.isExplosive && pr.armed && pr.weapon !== 'pipebomb') {
+    // pipe bombs come to rest on solids instead of vanishing
+    if (pr.weapon === 'pipebomb') {
+      const body = pr.body as Phaser.Physics.Arcade.Body;
+      if (body) { body.reset(pr.x, pr.y); body.setVelocity(0, 0); body.setAllowGravity(false); }
+      return;
+    }
+    if (pr.isExplosive) {
       this.explode(pr.x, pr.y, pr.explosionRadius);
       pr.deactivate();
-    } else if (pr.weapon !== 'pipebomb') {
+    } else {
       pr.deactivate();
     }
-    // secret block destruction
+    // secret block destruction (destructible walls)
     if (s?.isSecret) {
-      s.destroy();
-      this.particles.sparks(pr.x, pr.y);
       s.isSecret = false;
+      this.particles.sparks(pr.x, pr.y);
+      s.destroy?.();
     }
   }
 
@@ -366,7 +415,25 @@ export class GameScene extends Phaser.Scene implements GameLike {
       this.explode(p.x, p.y, 140);
       p.deactivate();
     });
-    this.pipes = [];
+    this.cleanupPipes();
+    sfx.explosion();
+  }
+
+  /** Auto-detonate expired pipe bombs; called each frame. */
+  updatePipes(_dt: number): void {
+    if (this.pipes.length === 0) return;
+    for (const p of this.pipes) {
+      if (!p.active) continue;
+      if (p.born >= p.lifeMs) {
+        this.explode(p.x, p.y, 140);
+        p.deactivate();
+      }
+    }
+    this.cleanupPipes();
+  }
+
+  private cleanupPipes(): void {
+    this.pipes = this.pipes.filter((p) => p.active);
   }
 
   registerProjectile(p: Projectile): void {
@@ -374,21 +441,24 @@ export class GameScene extends Phaser.Scene implements GameLike {
   }
 
   spawnEnemyProjectile(x: number, y: number, vx: number, vy: number, damage: number, gravity = 0, explosive = false): void {
-    const s = this.physics.add.sprite(x, y, 'bullet') as EnemyProjectile;
+    // pooled: reuse an inactive sprite if available
+    const s = (this.enemyProjectiles.get(x, y, 'bullet') as EnemyProjectile)
+      || (this.enemyProjectiles.create(x, y, 'bullet') as EnemyProjectile);
     s.damage = damage;
     s.explosive = explosive;
+    s.setActive(true).setVisible(true).enableBody(true, x, y, true, true);
     (s.body as Phaser.Physics.Arcade.Body).setAllowGravity(!!gravity);
-    s.setTint(0xff5533);
+    s.setTint(explosive ? 0xff3322 : 0xff5533);
     s.setVelocity(vx, vy);
     s.setDepth(7);
     s.setScale(1.4);
     s.setAngle(Phaser.Math.RadToDeg(Math.atan2(vy, vx)));
-    this.enemyProjectiles.add(s);
+    // auto-recycle after 3s if it hasn't hit anything
     this.time.delayedCall(3000, () => { if (s.active) this.killEnemyProjectile(s); });
   }
 
   private killEnemyProjectile(s: Phaser.Physics.Arcade.Sprite): void {
-    if (s.active) { this.particles.sparks(s.x, s.y); s.destroy(); }
+    if (s.active) { this.particles.sparks(s.x, s.y); s.disableBody(true, true); }
   }
 
   hitPlayer(pr: Projectile | EnemyProjectile): void {
@@ -472,12 +542,21 @@ export class GameScene extends Phaser.Scene implements GameLike {
   }
 
   // ---- helpers ----
-  hasLineOfSight(_x1: number, _y1: number, _x2: number, _y2: number): boolean { return true; }
+  /** Raycast segment against level platforms; returns false if a solid blocks the shot. */
+  hasLineOfSight(x1: number, y1: number, x2: number, y2: number): boolean {
+    const platforms = this.level.platforms;
+    for (let i = 0; i < platforms.length; i++) {
+      const p = platforms[i];
+      if (segmentAABB(x1, y1, x2, y2, p.x, p.y, p.x + p.w, p.y + p.h)) return false;
+    }
+    return true;
+  }
   shake(intensity: number, duration: number): void { this.cameras.main.shake(duration, intensity / 1000); }
 
   togglePause(): void {
     if (this.dying) return;
     this.paused = !this.paused;
+    this.touch?.setVisible(!this.paused);
     if (this.paused) {
       this.physics.pause();
       music.stop();
@@ -496,16 +575,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
 }
 
 // helpers
-function weaponRefill(id: string): number {
-  switch (id) {
-    case 'shotgun': return 12;
-    case 'chaingun': return 60;
-    case 'pipebomb': return 4;
-    case 'rocket': return 4;
-    case 'devastator': return 25;
-    default: return 0;
-  }
-}
+export { segmentAABB, weaponRefill } from '../utils';
 
 type PickupSprite = Phaser.Physics.Arcade.Sprite & {
   pickupKind: PickupSpawn['kind']; weapon?: import('../config').WeaponId;
