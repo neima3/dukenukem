@@ -61,4 +61,18 @@ export class ParticleSystem {
     const flash = this.scene.add.circle(x, y, radius, 0xffffff, 0.8);
     this.scene.tweens.add({ targets: flash, alpha: 0, scale: 2.5, duration: 220, onComplete: () => flash.destroy() });
   }
+
+  private _dmgCount = 0;
+  /** Floating damage number. Cheap: capped concurrent count, self-cleaning. */
+  damageNumber(x: number, y: number, amount: number, color = '#ffe066'): void {
+    if (this._dmgCount > 24) return;
+    this._dmgCount++;
+    const t = this.scene.add.text(x + Phaser.Math.Between(-6, 6), y, String(Math.round(amount)), {
+      fontFamily: "'Press Start 2P', monospace", fontSize: '12px', color,
+    }).setOrigin(0.5).setDepth(60).setShadow(0, 0, '#000000', 4, true, true);
+    this.scene.tweens.add({
+      targets: t, y: y - 34, alpha: 0, scale: { from: 1.2, to: 0.9 },
+      duration: 650, ease: 'Quad.easeOut', onComplete: () => { t.destroy(); this._dmgCount--; },
+    });
+  }
 }

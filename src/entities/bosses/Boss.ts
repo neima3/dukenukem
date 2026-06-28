@@ -32,9 +32,12 @@ export abstract class Boss extends Phaser.Physics.Arcade.Sprite {
   takeDamage(amount: number): void {
     if (!this.alive) return;
     this.health -= amount;
+    this.scene.particles.damageNumber(this.x, this.y - this.height + 10, amount, '#ff2d6a');
     this.setTintFill(0xffffff);
     this.scene.time.delayedCall(50, () => { if (this.alive) this.clearTint(); });
     sfx.bossHit();
+    // brief hit-stop on solid hits for weight
+    if (amount >= 30) this.scene.hitstop(45);
     const phaseBefore = this.phase;
     if (this.health <= this.maxHealth * 0.66 && this.phase < 2) this.phase = 2;
     if (this.health <= this.maxHealth * 0.33 && this.phase < 3) this.phase = 3;

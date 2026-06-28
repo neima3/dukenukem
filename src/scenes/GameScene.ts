@@ -86,6 +86,7 @@ export class GameScene extends Phaser.Scene implements GameLike {
 
     this.buildBackground();
     this.buildSolids();
+    this.startAmbient();
 
     this.enemies = this.physics.add.group({ runChildUpdate: true });
     this.bosses = this.physics.add.group({ runChildUpdate: true });
@@ -229,6 +230,33 @@ export class GameScene extends Phaser.Scene implements GameLike {
   }
 
   // ---- world building ----
+  /** Per-environment ambient particle ambiance (rain, dust, embers, …). */
+  private startAmbient(): void {
+    const key = this.level.paletteKey;
+    const w = this.level.width;
+    const cfg = (() => {
+      switch (key) {
+        case 'city':    return { tint: 0x88aacc, vy: 520, vx: -40,  qty: 1, freq: 40,  life: 1400, scale: { start: 0.6, end: 0.6 }, tall: 6, gravity: 0 };
+        case 'roofs':   return { tint: 0x6688ff, vy: 700, vx: -120, qty: 1, freq: 22,  life: 1100, scale: { start: 0.7, end: 0.7 }, tall: 8, gravity: 0 };
+        case 'desert':  return { tint: 0xccaa66, vy: 20,  vx: 220,  qty: 1, freq: 70,  life: 2200, scale: { start: 0.5, end: 0 }, tall: 2, gravity: 0 };
+        case 'sewers':  return { tint: 0x33aa66, vy: -10, vx: 30,   qty: 1, freq: 600, life: 5000, scale: { start: 6, end: 0 },   tall: 1, gravity: 0 };
+        case 'base':    return { tint: 0xff7733, vy: -120,vx: 10,   qty: 1, freq: 90,  life: 2600, scale: { start: 0.8, end: 0 }, tall: 2, gravity: -40 };
+        case 'ship':    return { tint: 0xaaaaff, vy: 10,  vx: -20,  qty: 1, freq: 120, life: 4000, scale: { start: 0.6, end: 0 }, tall: 2, gravity: 0 };
+        default:        return null;
+      }
+    })();
+    if (!cfg) return;
+    const emitter = this.add.particles(0, 0, 'pix', {
+      x: { min: 0, max: w }, y: { min: -20, max: 0 },
+      lifespan: cfg.life, speedY: { min: cfg.vy * 0.8, max: cfg.vy * 1.2 },
+      speedX: cfg.vx, quantity: cfg.qty, frequency: cfg.freq,
+      scale: cfg.scale, tint: cfg.tint, alpha: { min: 0.3, max: 0.7 },
+      gravityY: cfg.gravity,
+    });
+    emitter.setDepth(-6).setScrollFactor(0.7);
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => emitter.destroy());
+  }
+
   private buildBackground(): void {
     const pal = this.level.palette;
     const w = this.level.width, h = this.level.height;
@@ -612,6 +640,13 @@ export class GameScene extends Phaser.Scene implements GameLike {
     // honor the OS-level reduced-motion preference
     if (this._reducedMotion) { this.cameras.main.shake(Math.min(duration, 60), intensity / 4000); return; }
     this.cameras.main.shake(duration, intensity / 1000);
+  }
+  /** Brief "hit-stop" freeze for impact. Wall-clock based so it always releases. */
+  private _hitstopTimer: number | null = null;
+  hitstop(ms: number): void {
+    if (this._reducedMotion || this._hitstopTimer != null) return;
+    this.time.timeScale = 0.06;
+    this._hitstopTimer = window.setTimeout(() => { this.time.timeScale = 1; this._hitstopTimer = null; }, ms);
   }
   private get _reducedMotion(): boolean {
     return typeof window !== 'undefined' && !!window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
