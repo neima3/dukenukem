@@ -6,18 +6,18 @@ const ICONS: Record<WeaponId, string> = {
   pistol: 'iconPistol', shotgun: 'iconShotgun', chaingun: 'iconChaingun',
   pipebomb: 'iconPipebomb', rocket: 'iconRocket', devastator: 'iconDevastator',
 };
+const PX = "'Press Start 2P', monospace";
+const VT = "'VT323', monospace";
 
 export class HUDScene extends Phaser.Scene {
   game_scene!: GameScene;
   private healthBar!: Phaser.GameObjects.Rectangle;
   private armorBar!: Phaser.GameObjects.Rectangle;
   private healthTxt!: Phaser.GameObjects.Text;
-  private armorTxt!: Phaser.GameObjects.Text;
   private scoreTxt!: Phaser.GameObjects.Text;
   private ammoTxt!: Phaser.GameObjects.Text;
   private weaponIcon!: Phaser.GameObjects.Image;
   private weaponName!: Phaser.GameObjects.Text;
-  private levelTxt!: Phaser.GameObjects.Text;
   private secretTxt!: Phaser.GameObjects.Text;
   private comboTxt!: Phaser.GameObjects.Text;
   private bossBarWrap!: Phaser.GameObjects.Container;
@@ -35,38 +35,45 @@ export class HUDScene extends Phaser.Scene {
 
   create(): void {
     const { width, height } = this.scale;
-    this.add.rectangle(0, 0, width, 60, 0x000000, 0.45).setOrigin(0);
-    this.add.rectangle(0, height - 60, width, 60, 0x000000, 0.45).setOrigin(0);
 
-    // health
-    this.add.image(28, 22, 'pickupHealth').setScale(1.1).setScrollFactor(0);
-    this.healthBar = this.add.rectangle(50, 16, 200, 14, 0x550000).setOrigin(0).setScrollFactor(0);
-    this.healthTxt = this.add.text(50, 14, '', { fontFamily: 'monospace', fontSize: '12px', color: '#33ff66' }).setScrollFactor(0).setDepth(5);
-    this.recalcBar(this.healthBar, 1, 0x33ff66);
+    // top + bottom console strips with neon underlines
+    this.add.rectangle(0, 0, width, 64, 0x05060a, 0.55).setOrigin(0).setScrollFactor(0);
+    this.add.rectangle(0, 62, width, 2, 0xff2d6a, 0.7).setOrigin(0).setScrollFactor(0);
+    this.add.rectangle(0, height - 64, width, 64, 0x05060a, 0.55).setOrigin(0).setScrollFactor(0);
+    this.add.rectangle(0, height - 64, width, 2, 0x33ddff, 0.5).setOrigin(0).setScrollFactor(0);
+
+    // health (with glow fill)
+    this.add.image(28, 24, 'pickupHealth').setScale(1.2).setScrollFactor(0);
+    this.add.rectangle(50, 14, 220, 18, 0x14060a).setOrigin(0).setScrollFactor(0).setStrokeStyle(1, 0x331016);
+    this.healthBar = this.add.rectangle(52, 16, 216, 14, 0x33ff66).setOrigin(0).setScrollFactor(0).setDepth(2);
+    this.healthBar.setScrollFactor(0);
+    this.healthTxt = this.add.text(160, 15, '', { fontFamily: PX, fontSize: '10px', color: '#ffffff' }).setOrigin(0.5).setScrollFactor(0).setDepth(3);
 
     // armor
-    this.add.image(28, 46, 'pickupArmor').setScale(1.1).setScrollFactor(0);
-    this.armorBar = this.add.rectangle(50, 40, 200, 14, 0x002244).setOrigin(0).setScrollFactor(0);
-    this.recalcBar(this.armorBar, 0, 0x3399ff);
+    this.add.image(28, 48, 'pickupArmor').setScale(1.2).setScrollFactor(0);
+    this.add.rectangle(50, 38, 220, 18, 0x060a14).setOrigin(0).setScrollFactor(0).setStrokeStyle(1, 0x102233);
+    this.armorBar = this.add.rectangle(52, 40, 216, 14, 0x3399ff).setOrigin(0).setScrollFactor(0).setDepth(2);
+    this.armorBar.setScrollFactor(0);
 
     // weapon + ammo (bottom-left)
-    this.weaponIcon = this.add.image(40, height - 30, 'iconPistol').setScrollFactor(0).setScale(2);
-    this.weaponName = this.add.text(70, height - 46, 'PISTOL', { fontFamily: 'monospace', fontSize: '16px', color: '#ffe066' }).setScrollFactor(0);
-    this.ammoTxt = this.add.text(70, height - 26, '∞', { fontFamily: 'monospace', fontSize: '20px', color: '#ffffff', fontStyle: 'bold' }).setScrollFactor(0);
+    this.add.rectangle(16, height - 52, 220, 40, 0x0a0a14, 0.6).setOrigin(0, 0).setScrollFactor(0).setStrokeStyle(1, 0x222238);
+    this.weaponIcon = this.add.image(40, height - 32, 'iconPistol').setScrollFactor(0).setScale(2.4);
+    this.weaponName = this.add.text(74, height - 50, 'PISTOL', { fontFamily: PX, fontSize: '10px', color: '#ffe066' }).setScrollFactor(0);
+    this.ammoTxt = this.add.text(74, height - 30, '∞', { fontFamily: VT, fontSize: '28px', color: '#ffffff' }).setScrollFactor(0);
 
     // score + secrets (top-right)
-    this.scoreTxt = this.add.text(width - 20, 12, 'SCORE 0', { fontFamily: 'monospace', fontSize: '18px', color: '#ffe066' }).setOrigin(1, 0).setScrollFactor(0);
-    this.secretTxt = this.add.text(width - 20, 36, 'SECRETS 0/0', { fontFamily: 'monospace', fontSize: '12px', color: '#9a9ac6' }).setOrigin(1, 0).setScrollFactor(0);
-    this.levelTxt = this.add.text(width / 2, 12, `LEVEL ${this.levelIndex + 1}`, { fontFamily: 'monospace', fontSize: '16px', color: '#ff2d6a' }).setOrigin(0.5, 0).setScrollFactor(0);
-    this.comboTxt = this.add.text(width / 2, 36, '', { fontFamily: 'monospace', fontSize: '14px', color: '#ff6644' }).setOrigin(0.5, 0).setScrollFactor(0);
+    this.scoreTxt = this.add.text(width - 24, 14, 'SCORE 000000', { fontFamily: PX, fontSize: '12px', color: '#ffe066' }).setOrigin(1, 0).setScrollFactor(0).setShadow(0,0,'#ffcc33',6,true,true);
+    this.secretTxt = this.add.text(width - 24, 38, 'SECRETS 0/0', { fontFamily: VT, fontSize: '20px', color: '#9a9ac6' }).setOrigin(1, 0).setScrollFactor(0);
+    this.add.text(width / 2, 10, `STAGE ${this.levelIndex + 1}`, { fontFamily: PX, fontSize: '12px', color: '#ff2d6a' }).setOrigin(0.5, 0).setScrollFactor(0).setShadow(0,0,'#ff2d6a',8,true,true);
+    this.comboTxt = this.add.text(width / 2, 34, '', { fontFamily: PX, fontSize: '10px', color: '#ff6644' }).setOrigin(0.5, 0).setScrollFactor(0).setShadow(0,0,'#ff6644',6,true,true);
 
     // boss bar (center top, hidden initially)
-    this.bossBarWrap = this.add.container(width / 2, 64).setScrollFactor(0).setVisible(false);
-    this.bossNameTxt = this.add.text(0, -20, 'BOSS', { fontFamily: 'monospace', fontSize: '14px', color: '#ff2d6a' }).setOrigin(0.5);
-    this.add.rectangle(0, 0, 420, 16, 0x220000).setOrigin(0.5);
-    this.bossBarFill = this.add.rectangle(-210, 0, 420, 16, 0xff2d6a).setOrigin(0, 0.5);
+    this.bossBarWrap = this.add.container(width / 2, 84).setScrollFactor(0).setVisible(false);
+    this.bossNameTxt = this.add.text(0, -22, 'BOSS', { fontFamily: PX, fontSize: '11px', color: '#ff2d6a' }).setOrigin(0.5).setShadow(0,0,'#ff2d6a',8,true,true);
+    this.add.rectangle(0, 0, 440, 18, 0x1a0408).setOrigin(0.5);
+    this.bossBarFill = this.add.rectangle(-220, 0, 440, 18, 0xff2d6a).setOrigin(0, 0.5);
     this.bossBarWrap.add([this.bossNameTxt, this.bossBarFill]);
-    this.bossBarWrap.add(this.add.rectangle(0, 0, 420, 16).setStrokeStyle(2, 0xff2d6a).setOrigin(0.5));
+    this.bossBarWrap.add(this.add.rectangle(0, 0, 440, 18).setStrokeStyle(2, 0xff2d6a).setOrigin(0.5));
 
     // damage vignette
     this.dmgVignette = this.add.rectangle(0, 0, width, height, 0xff0000, 0).setOrigin(0).setScrollFactor(0).setDepth(50);
@@ -106,8 +113,7 @@ export class HUDScene extends Phaser.Scene {
   }
 
   private recalcBar(bar: Phaser.GameObjects.Rectangle, frac: number, _color: number): void {
-    const w = Math.max(0, Math.min(1, frac)) * 200;
-    bar.width = w;
+    bar.width = Math.max(0, Math.min(1, frac)) * 216;
   }
 
   flashDamage(): void {
@@ -118,12 +124,12 @@ export class HUDScene extends Phaser.Scene {
   showBossBar(name: string): void {
     this.bossNameTxt.setText(name);
     this.bossBarWrap.setVisible(true);
-    this.bossBarFill.width = 420;
+    this.bossBarFill.width = 440;
   }
   hideBossBar(): void {
     this.tweens.add({ targets: this.bossBarWrap, alpha: 0, duration: 400, onComplete: () => { this.bossBarWrap.setVisible(false); this.bossBarWrap.setAlpha(1); } });
   }
   updateBossBar(frac: number, _name: string): void {
-    this.bossBarFill.width = Math.max(0, frac) * 420;
+    this.bossBarFill.width = Math.max(0, frac) * 440;
   }
 }

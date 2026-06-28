@@ -270,12 +270,18 @@ export class GameScene extends Phaser.Scene implements GameLike {
     // ground band
     const gy = this.level.groundY;
     const ground = this.add.rectangle(this.level.width / 2, gy + 200, this.level.width, 400, pal.tile).setOrigin(0.5, 0);
-    this.add.rectangle(this.level.width / 2, gy + 4, this.level.width, 8, pal.tileDark, 0.8).setOrigin(0.5, 0).setDepth(-1);
+    // beveled top edge + texture lines on the ground
+    this.add.rectangle(this.level.width / 2, gy + 4, this.level.width, 6, pal.tileDark, 0.95).setOrigin(0.5, 0).setDepth(-1);
+    this.add.rectangle(this.level.width / 2, gy, this.level.width, 3, this.level.palette.accent, 0.25).setOrigin(0.5, 1).setDepth(-1);
+    for (let mx = 0; mx < this.level.width; mx += 64) {
+      this.add.rectangle(mx + 32, gy + 14, 2, 20, pal.tileDark, 0.5).setOrigin(0.5, 0).setDepth(-1);
+    }
     this.solids.add(ground, true);
-    // platforms
+    // platforms (beveled)
     for (const p of this.level.platforms) {
       const r = this.add.rectangle(p.x + p.w / 2, p.y + p.h / 2, p.w, p.h, pal.tile).setOrigin(0.5, 0.5);
-      this.add.rectangle(p.x + p.w / 2, p.y, p.w, 4, pal.tileDark, 0.8).setOrigin(0.5, 0).setDepth(-1);
+      this.add.rectangle(p.x + p.w / 2, p.y, p.w, 3, this.level.palette.accent, 0.3).setOrigin(0.5, 1).setDepth(-1);
+      this.add.rectangle(p.x + p.w / 2, p.y + p.h - 2, p.w, 3, pal.tileDark, 0.6).setOrigin(0.5, 1).setDepth(-1);
       this.solids.add(r, true);
     }
     // secret blocks (look like tiles, destructible)

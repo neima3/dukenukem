@@ -5,6 +5,9 @@ import { music } from '../audio/musicGen';
 import { sfx } from '../audio/sfxGen';
 import { LEVELS } from '../levels/levelData';
 
+const PX = "'Press Start 2P', monospace";
+const VT = "'VT323', monospace";
+
 export class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
 
@@ -24,15 +27,18 @@ export class MenuScene extends Phaser.Scene {
       this.tweens.add({ targets: s, y: '+=10', duration: Phaser.Math.Between(2000, 6000), yoyo: true, repeat: -1 });
     }
 
-    this.add.text(width / 2, 110, 'REX BRUTUS', {
-      fontFamily: 'monospace', fontSize: '88px', color: '#ff2d6a', fontStyle: 'bold',
-    }).setOrigin(0.5).setShadow(0, 0, '#ff2d6a', 6, true, true);
-    this.add.text(width / 2, 180, 'ALIEN APOCALYPSE', {
-      fontFamily: 'monospace', fontSize: '28px', color: '#ffcc33',
-    }).setOrigin(0.5);
+    // neon horizon
+    const band = this.add.rectangle(0, height * 0.62, width, 3, 0xff2d6a, 0.5).setOrigin(0, 0.5).setDepth(-2);
 
-    this.add.text(width / 2, 240, '— an original retro side-scrolling shooter —', {
-      fontFamily: 'monospace', fontSize: '14px', color: '#6a6a99',
+    this.add.text(width / 2, 96, 'REX BRUTUS', {
+      fontFamily: PX, fontSize: '52px', color: '#ff2d6a',
+    }).setOrigin(0.5).setShadow(0, 0, '#ff2d6a', 16, true, true);
+    this.add.text(width / 2, 150, 'ALIEN  APOCALYPSE', {
+      fontFamily: PX, fontSize: '16px', color: '#ffcc33',
+    }).setOrigin(0.5).setShadow(0, 0, '#ffcc33', 6, true, true);
+
+    this.add.text(width / 2, 196, '— original retro side-scrolling shooter —', {
+      fontFamily: VT, fontSize: '22px', color: '#6a6a99',
     }).setOrigin(0.5);
 
     const items = [
@@ -46,19 +52,19 @@ export class MenuScene extends Phaser.Scene {
     items.push({ label: save.muted ? 'SOUND: OFF' : 'SOUND: ON', action: () => this.toggleSound(items) });
     items.push({ label: 'CONTROLS', action: () => this.showControls() });
 
-    let y = 330;
+    let y = 320;
     const entries: Phaser.GameObjects.Text[] = [];
     const actions: (() => void)[] = [];
     items.forEach((it, i) => {
       const t = this.add.text(width / 2, y, it.label, {
-        fontFamily: 'monospace', fontSize: '26px', color: '#cfcfe6',
+        fontFamily: PX, fontSize: '18px', color: '#cfcfe6',
       }).setOrigin(0.5).setInteractive({ useHandCursor: true });
-      t.on('pointerover', () => { t.setColor('#ffcc33'); sfx.uiSelect(); });
-      t.on('pointerout', () => t.setColor(i === this._menuSel ? '#ffcc33' : '#cfcfe6'));
+      t.on('pointerover', () => { t.setColor('#ffcc33'); t.setShadow(0,0,'#ffcc33',8,true,true); sfx.uiSelect(); });
+      t.on('pointerout', () => { t.setColor(i === this._menuSel ? '#ffcc33' : '#cfcfe6'); t.setShadow(); });
       t.on('pointerdown', () => { sfx.uiSelect(); it.action(); });
       entries.push(t);
       actions.push(it.action);
-      y += 54;
+      y += 50;
     });
 
     // keyboard-only navigation (accessibility)
@@ -72,8 +78,8 @@ export class MenuScene extends Phaser.Scene {
     kb.on('keydown-DOWN', () => { this._menuSel = (this._menuSel + 1) % entries.length; this._paintMenu(); sfx.uiSelect(); });
     kb.on('keydown-ENTER', () => { sfx.uiSelect(); actions[this._menuSel]?.(); });
 
-    this.add.text(width / 2, height - 30, `HIGH SCORE: ${save.highScore.toString().padStart(6, '0')}`, {
-      fontFamily: 'monospace', fontSize: '16px', color: '#7a7a99',
+    this.add.text(width / 2, height - 30, `HIGH SCORE  ${save.highScore.toString().padStart(6, '0')}`, {
+      fontFamily: PX, fontSize: '12px', color: '#7a7a99',
     }).setOrigin(0.5);
 
     music.play('menu');
@@ -83,7 +89,11 @@ export class MenuScene extends Phaser.Scene {
   private _menuActions: (() => void)[] = [];
   private _menuSel = 0;
   private _paintMenu(): void {
-    this._menuEntries.forEach((t, i) => t.setColor(i === this._menuSel ? '#ffcc33' : '#cfcfe6'));
+    this._menuEntries.forEach((t, i) => {
+      const sel = i === this._menuSel;
+      t.setColor(sel ? '#ffcc33' : '#cfcfe6');
+      t.setShadow(sel ? 0 : undefined, sel ? 0 : undefined, sel ? '#ffcc33' : '#000', sel ? 10 : 0, true, true);
+    });
   }
 
   private toggleSound(items: { label: string }[]): void {
@@ -117,7 +127,7 @@ export class MenuScene extends Phaser.Scene {
       'click to close',
     ];
     const txt = this.add.text(width / 2, height / 2, lines.join('\n'), {
-      fontFamily: 'monospace', fontSize: '20px', color: '#ffe066', align: 'center',
+      fontFamily: VT, fontSize: '26px', color: '#ffe066', align: 'center',
     }).setOrigin(0.5);
     overlay.on('pointerdown', () => { overlay.destroy(); txt.destroy(); });
   }
@@ -126,8 +136,8 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.9).setOrigin(0).setInteractive();
     this.add.text(width / 2, 80, 'SELECT LEVEL', {
-      fontFamily: 'monospace', fontSize: '36px', color: '#ff2d6a', fontStyle: 'bold',
-    }).setOrigin(0.5);
+      fontFamily: PX, fontSize: '24px', color: '#ff2d6a',
+    }).setOrigin(0.5).setShadow(0,0,'#ff2d6a',10,true,true);
 
     const colX = [width / 2 - 220, width / 2, width / 2 + 220];
     LEVELS.forEach((lv, i) => {
@@ -163,12 +173,12 @@ export class MenuScene extends Phaser.Scene {
     const { width, height } = this.scale;
     const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.9).setOrigin(0).setInteractive();
     this.add.text(width / 2, 110, 'SETTINGS', {
-      fontFamily: 'monospace', fontSize: '40px', color: '#ff2d6a', fontStyle: 'bold',
-    }).setOrigin(0.5);
+      fontFamily: PX, fontSize: '28px', color: '#ff2d6a',
+    }).setOrigin(0.5).setShadow(0,0,'#ff2d6a',10,true,true);
 
     const drawSlider = (label: string, y: number, getValue: () => number, setValue: (v: number) => void): void => {
       this.add.text(width / 2 - 180, y, label, {
-        fontFamily: 'monospace', fontSize: '22px', color: '#cfcfe6',
+        fontFamily: PX, fontSize: '14px', color: '#cfcfe6',
       }).setOrigin(0, 0.5);
       const SEGMENTS = 10;
       const segW = 26, gap = 4;
