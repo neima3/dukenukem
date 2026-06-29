@@ -4,9 +4,7 @@ import { audio } from '../systems/AudioSystem';
 import { music } from '../audio/musicGen';
 import { sfx } from '../audio/sfxGen';
 import { LEVELS } from '../levels/levelData';
-
-const PX = "'Press Start 2P', monospace";
-const VT = "'VT323', monospace";
+import { drawLeaderboard, PX, VT } from '../systems/LeaderboardUI';
 
 export class MenuScene extends Phaser.Scene {
   constructor() { super('Menu'); }
@@ -48,6 +46,7 @@ export class MenuScene extends Phaser.Scene {
       items.unshift({ label: `CONTINUE (Level ${save.unlocked + 1})`, action: () => this.startLevel(save.unlocked) });
     }
     items.push({ label: 'LEVEL SELECT', action: () => this.showLevelSelect() });
+    items.push({ label: 'LEADERBOARD', action: () => this.showLeaderboard() });
     items.push({ label: 'SETTINGS', action: () => this.showSettings() });
     items.push({ label: save.muted ? 'SOUND: OFF' : 'SOUND: ON', action: () => this.toggleSound(items) });
     items.push({ label: 'CONTROLS', action: () => this.showControls() });
@@ -212,6 +211,25 @@ export class MenuScene extends Phaser.Scene {
       fontFamily: 'monospace', fontSize: '13px', color: '#6a6a99',
     }).setOrigin(0.5);
 
+    overlay.on('pointerdown', () => { overlay.destroy(); this.scene.restart(); });
+  }
+
+  private showLeaderboard(): void {
+    const { width, height } = this.scale;
+    const overlay = this.add.rectangle(0, 0, width, height, 0x000000, 0.92).setOrigin(0).setInteractive();
+    this.add.text(width / 2, 90, 'LEADERBOARD', {
+      fontFamily: PX, fontSize: '26px', color: '#ff2d6a',
+    }).setOrigin(0.5).setShadow(0, 0, '#ff2d6a', 12, true, true);
+    if (save.leaderboard.length === 0) {
+      this.add.text(width / 2, height / 2, 'NO SCORES YET\nBE THE FIRST!', {
+        fontFamily: PX, fontSize: '14px', color: '#6a6a99', align: 'center',
+      }).setOrigin(0.5);
+    } else {
+      drawLeaderboard(this, width / 2, 150, 10);
+    }
+    this.add.text(width / 2, height - 40, 'click to close', {
+      fontFamily: VT, fontSize: '20px', color: '#555577',
+    }).setOrigin(0.5);
     overlay.on('pointerdown', () => { overlay.destroy(); this.scene.restart(); });
   }
 

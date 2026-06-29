@@ -28,6 +28,10 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
 
   coyote = 0;
   jumpsLeft = 1;
+  private _walkT = 0;     // walk-cycle accumulator
+  private _walkFrame = 0;
+  private _recoil = 0;    // ms of recoil kick remaining
+  private _curTex = 'player';
 
   constructor(scene: GameScene, x: number, y: number) {
     super(scene, x, y, 'player');
@@ -184,7 +188,8 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
     if (this.firing) {
       const muzzleX = this.x + Math.cos(targetAngle) * 22;
       const muzzleY = (this.y - 22) + Math.sin(targetAngle) * 22;
-      this.currentWeapon.tryFire(this.scene, time, muzzleX, muzzleY, targetAngle);
+      const fired = this.currentWeapon.tryFire(this.scene, time, muzzleX, muzzleY, targetAngle);
+      if (fired) this._recoil = Math.max(this._recoil, 90);
     }
 
     // detonate pipe bombs
@@ -196,14 +201,26 @@ export class Player extends Phaser.Physics.Arcade.Sprite {
       this.die();
     }
 
-    // animation tweaks via scale to simulate walk
-    if (this.grounded && Math.abs(vx) > 10) {
-      this.setAngle(Math.sin(time / 60) * 2);
+    // ---- animation: pick the right frame + apply recoil kick ----
+    let tex = 'player';
+    if (this.crouching) {
+      tex = 'playerCrouch';
+    } else if (!this.grounded) {
+      tex = 'playerJump';
+    } else if (Math.abs(vx) > 10) {
+      // walk cycle
+      this._walkT += dt;
+      if (this._walkT > 130) { this._walkT = 0; this._walkFrame ^= 1; }
+      tex = this._walkFrame ? 'playerW1' : 'playerW2';
     } else {
-      this.setAngle(0);
+      this._walkFrame = 0;
     }
-    // crouch squish (visual only)
-    this.setScale(1, this.crouching ? 0.85 : 1);
+    if (tex !== this._curTex) { this.setTexture(tex); this._curTex = tex; }
+
+    // recoil: small backward scale punch that eases out
+    if (this._recoil > 0) this._recoil -= dt;
+    const r = this._recoil > 0 ? 1 + (this._recoil / 90) * 0.08 : 1;
+    this.setScale(r, 2 - r);
 
     // tint pulse when low health
     if (this.health <= 25 && this.invuln <= 0) {

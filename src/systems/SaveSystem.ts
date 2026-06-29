@@ -1,16 +1,20 @@
 /** Persistent save state via localStorage. */
+export type ScoreEntry = { name: string; score: number };
+
 export type SaveData = {
   unlocked: number;     // highest unlocked level index (0-based)
-  highScore: number;    // total high score
+  highScore: number;    // single best score (kept for the menu footer)
   muted: boolean;
   sfxVol: number;       // 0..1
   musicVol: number;     // 0..1
+  scores: ScoreEntry[]; // top-10 leaderboard (newest tied entry first)
 };
 
 const KEY = 'rexbrutus_save_v1';
+const MAX_SCORES = 10;
 
 export class SaveSystem {
-  private data: SaveData = { unlocked: 0, highScore: 0, muted: false, sfxVol: 0.6, musicVol: 0.35 };
+  private data: SaveData = { unlocked: 0, highScore: 0, muted: false, sfxVol: 0.6, musicVol: 0.35, scores: [] };
 
   load(): SaveData {
     try {
@@ -50,6 +54,28 @@ export class SaveSystem {
     }
   }
 
+  /** Top-10 leaderboard, highest first. */
+  get leaderboard(): ScoreEntry[] { return this.data.scores.slice(); }
+
+  /** True if `score` would make the top-10 board. */
+  qualifies(score: number): boolean {
+    if (score <= 0) return false;
+    if (this.data.scores.length < MAX_SCORES) return true;
+    return score > (this.data.scores[this.data.scores.length - 1]?.score ?? 0);
+  }
+
+  /** Insert a name/score into the board (desc by score, newest tie first), trim to 10. */
+  submitEntry(name: string, score: number): void {
+    const entry: ScoreEntry = { name: (name || '---').slice(0, 3).toUpperCase(), score };
+    // insert before the first entry with a strictly lower score (=> newest-first on ties)
+    let i = 0;
+    while (i < this.data.scores.length && this.data.scores[i].score > score) i++;
+    this.data.scores.splice(i, 0, entry);
+    this.data.scores = this.data.scores.slice(0, MAX_SCORES);
+    if (score > this.data.highScore) this.data.highScore = score;
+    this.save();
+  }
+
   setMuted(m: boolean): void {
     this.data.muted = m;
     this.save();
@@ -69,7 +95,14 @@ export class SaveSystem {
     const keepSfx = this.data.sfxVol;
     const keepMusic = this.data.musicVol;
     const keepMuted = this.data.muted;
-    this.data = { unlocked: 0, highScore: 0, muted: keepMuted, sfxVol: keepSfx, musicVol: keepMusic };
+    const keepScores = this.data.scores;
+    this.data = { unlocked: 0, highScore: 0, muted: keepMuted, sfxVol: keepSfx, musicVol: keepMusic, scores: keepScores };
+    this.save();
+  }
+
+  /** Full wipe to factory defaults (used by "reset all" UI and tests). */
+  wipe(): void {
+    this.data = { unlocked: 0, highScore: 0, muted: false, sfxVol: 0.6, musicVol: 0.35, scores: [] };
     this.save();
   }
 }

@@ -70,24 +70,47 @@ function shade(hex: number, amt: number): number {
 
 // ---------------------------- sprites ----------------------------
 
-function drawPlayer(scene: Phaser.Scene): void {
+type PlayerPhase = 'idle' | 'w1' | 'w2' | 'crouch' | 'jump';
+function paintPlayer(g: G, phase: PlayerPhase): void {
   const C = COLORS;
-  outlined(scene, 'player', 32, 44, (g) => {
-    const leg = shade(C.vest, -0.25);
+  const leg = shade(C.vest, -0.25);
+  // legs differ by phase (walk cycle / crouch / jump tuck)
+  if (phase === 'crouch') {
+    px(g, 7, 34, 8, 8, leg); px(g, 17, 34, 8, 8, leg);
+    px(g, 8, 41, 6, 2, 0x050507); px(g, 17, 41, 6, 2, 0x050507);
+  } else if (phase === 'jump') {
+    px(g, 8, 30, 7, 10, leg); px(g, 17, 30, 7, 10, leg);
+    px(g, 6, 36, 4, 4, 0x050507); px(g, 22, 36, 4, 4, 0x050507);
+  } else if (phase === 'w1') {
+    px(g, 6, 32, 7, 12, leg); px(g, 19, 32, 7, 12, leg);
+    px(g, 6, 42, 6, 2, 0x050507); px(g, 19, 42, 6, 2, 0x050507);
+  } else if (phase === 'w2') {
+    px(g, 10, 32, 7, 12, leg); px(g, 15, 32, 7, 12, leg);
+    px(g, 10, 42, 6, 2, 0x050507); px(g, 15, 42, 6, 2, 0x050507);
+  } else {
     px(g, 8, 32, 7, 12, leg); px(g, 17, 32, 7, 12, leg);
     px(g, 9, 42, 6, 2, 0x050507); px(g, 17, 42, 6, 2, 0x050507);
-    px(g, 7, 16, 18, 18, C.player);
-    px(g, 9, 18, 14, 12, C.vest);
-    px(g, 9, 18, 14, 2, shade(C.vest, 0.18));           // chest highlight
-    px(g, 11, 20, 4, 8, shade(C.player, 0.12));          // arm
-    px(g, 17, 20, 4, 8, shade(C.player, -0.12));         // arm
-    px(g, 10, 4, 12, 12, C.playerSkin);
-    px(g, 10, 4, 12, 4, C.player);                       // bandana
-    px(g, 10, 3, 12, 1, shade(C.player, 0.25));
-    px(g, 10, 6, 12, 3, 0x080808);                       // sunglasses
-    px(g, 14, 7, 4, 2, 0x334466);                        // lens shine
-    px(g, 13, 12, 6, 1, 0x551111);                       // grin
-    px(g, 24, 20, 6, 3, 0x222233);                       // gun
+  }
+  // torso
+  px(g, 7, 16, 18, 18, C.player);
+  px(g, 9, 18, 14, 12, C.vest);
+  px(g, 9, 18, 14, 2, shade(C.vest, 0.18));
+  px(g, 11, 20, 4, 8, shade(C.player, 0.12));
+  px(g, 17, 20, 4, 8, shade(C.player, -0.12));
+  // head + bandana + sunglasses
+  px(g, 10, 4, 12, 12, C.playerSkin);
+  px(g, 10, 4, 12, 4, C.player);
+  px(g, 10, 3, 12, 1, shade(C.player, 0.25));
+  px(g, 10, 6, 12, 3, 0x080808);
+  px(g, 14, 7, 4, 2, 0x334466);
+  px(g, 13, 12, 6, 1, 0x551111);
+  px(g, 24, 20, 6, 3, 0x222233); // gun
+}
+
+function drawPlayer(scene: Phaser.Scene): void {
+  (['idle', 'w1', 'w2', 'crouch', 'jump'] as PlayerPhase[]).forEach((p) => {
+    const key = p === 'idle' ? 'player' : `player${p.charAt(0).toUpperCase()}${p.slice(1)}`;
+    outlined(scene, key, 32, 44, (g) => paintPlayer(g, p));
   });
 }
 
